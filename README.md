@@ -46,11 +46,7 @@ Este arquivo é usado quando a API Server está inacessível, mas o nó master p
 
 ---
 
-## ============================
-
 ## 1️⃣ coleta_ocp_completo.py
-
-## ============================
 
 **📄 Arquivo:** `coleta_ocp_completo.py`  
 **Linguagem:** **Python 3**
@@ -85,11 +81,7 @@ O script gerará:
 
 ---
 
-## ============================
-
 ## 2️⃣ coleta_ocp_completo.sh
-
-## ============================
 
 **📄 Arquivo:** `coleta_ocp_completo.sh`  
 **Linguagem:** **Bash**
@@ -120,11 +112,7 @@ Criará: `ocp_debug_YYYYMMDD_HHMMSS.txt`
 
 ---
 
-## ============================
-
 ## 3️⃣ coleta_ocp_simples.sh
-
-## ============================
 
 **📄 Arquivo:** `coleta_ocp_simples.sh`  
 **Linguagem:** **Bash**
@@ -155,11 +143,7 @@ Gera: `ocp_quick_YYYYMMDD_HHMMSS.txt`
 
 ---
 
-## ============================
-
 ## 4️⃣ coleta_ocp_simples.py
-
-## ============================
 
 **📄 Arquivo:** `coleta_ocp_simples.py`  
 **Linguagem:** **Python 3**
