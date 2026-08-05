@@ -2,88 +2,140 @@
 
 import subprocess
 import os
-import datetime
+import shutil
 import sys
+import time
+import datetime
 
-def run_command(command, description, log_file):
-    """Executa um comando e registra a saída"""
-    print(f"\n=== {description} ===")
-    
-    with open(log_file, 'a', encoding='utf-8') as f:
-        f.write(f"\n=== {description} ===\n")
-        f.flush()
-        
-        try:
-            process = subprocess.Popen(
-                command,
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
-            
-            # Ler e escrever a saída em tempo real
-            for line in process.stdout:
-                print(line, end='')
-                f.write(line)
-                f.flush()
-            
-            process.wait()
-            
-            if process.returncode != 0:
-                print(f"AVISO: Comando retornou código {process.returncode}")
-                
-        except Exception as e:
-            error_msg = f"ERRO ao executar comando: {e}\n"
-            print(error_msg)
-            f.write(error_msg)
+KUBECONFIG_PATH = "/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/localhost.kubeconfig"
+OCP_DOMAIN = os.environ.get("OCP_DOMAIN", "")  # ex: export OCP_DOMAIN=ocp.exemplo.com.br
+COMMAND_TIMEOUT = 600  # segundos
+
+def run_command(command, description, log_file, timeout=COMMAND_TIMEOUT):
+    """Executa um comando (lista de args) e registra a saída em tempo real, com timeout."""
+    header = f"\n=== {description} ===\n"
+    print(header, end='')
+    log_file.write(header)
+    log_file.flush()
+
+    process = None
+    try:
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+
+        start = time.monotonic()
+        for line in process.stdout:
+            print(line, end='')
+            log_file.write(line)
+            log_file.flush()
+            if time.monotonic() - start > timeout:
+                process.kill()
+                msg = f"ERRO: comando excedeu timeout de {timeout}s e foi encerrado\n"
+                print(msg, end='')
+                log_file.write(msg)
+                break
+
+        process.wait()
+
+        if process.returncode != 0:
+            msg = f"AVISO: comando retornou código {process.returncode}\n"
+            print(msg, end='')
+            log_file.write(msg)
+
+    except FileNotFoundError as e:
+        msg = f"ERRO: comando não encontrado: {e}\n"
+        print(msg, end='')
+        log_file.write(msg)
+    except KeyboardInterrupt:
+        if process:
+            process.kill()
+        raise
+    except Exception as e:
+        msg = f"ERRO ao executar comando: {e}\n"
+        print(msg, end='')
+        log_file.write(msg)
+
+
+def descobrir_pod_etcd():
+    """Descobre dinamicamente o pod etcd; usa OCP_DOMAIN como fallback se a descoberta falhar."""
+    try:
+        result = subprocess.run(
+            ["oc", "get", "pods", "-n", "openshift-etcd", "-o", "name"],
+            capture_output=True, text=True, timeout=30
+        )
+        for line in result.stdout.splitlines():
+            nome = line.strip().split("/")[-1]
+            if nome.startswith("etcd-") and "guard" not in nome:
+                return nome
+    except Exception:
+        pass
+
+    if OCP_DOMAIN:
+        return f"etcd-master-0.{OCP_DOMAIN}"
+    return None
+
 
 def main():
-    # Configurar arquivo de log
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = f"ocp_debug_{timestamp}.txt"
-    
-    # Configurar KUBECONFIG
-    kubeconfig_path = "/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/localhost.kubeconfig"
-    os.environ['KUBECONFIG'] = kubeconfig_path
-    
-    print(f"Iniciando coleta de informações do OpenShift")
-    print(f"Arquivo de log: {log_file}")
-    
-    # Verificar se o KUBECONFIG existe
-    if not os.path.exists(kubeconfig_path):
-        print(f"ERRO: Arquivo KUBECONFIG não encontrado: {kubeconfig_path}")
+    log_filename = f"ocp_debug_{timestamp}.txt"
+
+    os.environ['KUBECONFIG'] = KUBECONFIG_PATH
+
+    print("Iniciando coleta de informações do OpenShift")
+    print(f"Arquivo de log: {log_filename}")
+
+    if shutil.which("oc") is None:
+        print("ERRO: binário 'oc' não encontrado no PATH")
         sys.exit(1)
-    
-    # Executar comandos
+
+    if not os.path.exists(KUBECONFIG_PATH):
+        print(f"ERRO: Arquivo KUBECONFIG não encontrado: {KUBECONFIG_PATH}")
+        sys.exit(1)
+
+    pod_etcd = descobrir_pod_etcd()
+    if pod_etcd is None:
+        print("AVISO: não foi possível determinar o pod etcd; defina a variável de ambiente OCP_DOMAIN ou ajuste manualmente")
+
     commands = [
-        ("oc adm must-gather --image=registry.redhat.io/container-native-virtualization/cnv-must-gather-rhel9:v4.16.21", 
+        (["oc", "adm", "must-gather", "--image=registry.redhat.io/container-native-virtualization/cnv-must-gather-rhel9:v4.16.21"],
          "Must-Gather CNV"),
-        ("oc adm must-gather", 
+        (["oc", "adm", "must-gather"],
          "Must-Gather Padrão"),
-        ("oc get co", 
+        (["oc", "get", "co"],
          "Status dos Operadores"),
-        ("oc get pods -n openshift-etcd", 
+        (["oc", "get", "pods", "-n", "openshift-etcd"],
          "Pods do etcd"),
-        ("oc -n openshift-etcd logs etcd-master-0.ocp.embasanet.ba.gov.br", 
+        (["oc", "-n", "openshift-etcd", "logs", pod_etcd] if pod_etcd else None,
          "Logs do etcd"),
-        ("oc get co network -o yaml", 
-         "Operador de Rede (YAML)")
+        (["oc", "get", "co", "network", "-o", "yaml"],
+         "Operador de Rede (YAML)"),
     ]
-    
-    # Escrever cabeçalho
-    with open(log_file, 'w', encoding='utf-8') as f:
-        f.write(f"Coleta de Informações OpenShift\n")
-        f.write(f"Data/Hora: {datetime.datetime.now()}\n")
-        f.write(f"KUBECONFIG: {kubeconfig_path}\n")
-    
-    # Executar todos os comandos
-    for command, description in commands:
-        run_command(command, description, log_file)
-    
-    print(f"\nColeta concluída! Arquivo salvo em: {log_file}")
+
+    with open(log_filename, 'w', encoding='utf-8') as log_file:
+        log_file.write("Coleta de Informações OpenShift\n")
+        log_file.write(f"Data/Hora: {datetime.datetime.now()}\n")
+        log_file.write(f"KUBECONFIG: {KUBECONFIG_PATH}\n")
+        log_file.flush()
+
+        try:
+            for command, description in commands:
+                if command is None:
+                    msg = f"\n=== {description} ===\nERRO: pod etcd não identificado, comando ignorado\n"
+                    print(msg, end='')
+                    log_file.write(msg)
+                    continue
+                run_command(command, description, log_file)
+        except KeyboardInterrupt:
+            print("\nColeta interrompida pelo usuário")
+            log_file.write("\nColeta interrompida pelo usuário\n")
+            sys.exit(130)
+
+    print(f"\nColeta concluída! Arquivo salvo em: {log_filename}")
 
 if __name__ == "__main__":
     main()
