@@ -1,3 +1,8 @@
+# Artefatos gerados pelos scripts de coleta OCP
+ocp_debug_*.txt
+ocp_quick_*.txt
+must-gather*/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -205,3 +210,4 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+.claude/settings.json
