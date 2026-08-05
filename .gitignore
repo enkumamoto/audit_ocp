@@ -1,3 +1,7 @@
+# Claude Code (contexto local, não versionado)
+CLAUDE.md
+.claude/
+
 # Artefatos gerados pelos scripts de coleta OCP
 ocp_debug_*.txt
 ocp_quick_*.txt
