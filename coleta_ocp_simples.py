@@ -38,7 +38,6 @@ def quick_collect():
         ("=== OPERADORES ===", ["oc", "get", "co"]),
         ("=== ETCD PODS ===", ["oc", "get", "pods", "-n", "openshift-etcd"]),
         ("=== NETWORK OPERATOR ===", ["oc", "get", "co", "network", "-o", "yaml"]),
-        ("=== Coletando informações do Uso de disco ===", ["oc", "project", "openshift-logging"]),
     ]
 
     with open(log_filename, 'w', encoding='utf-8') as f:
@@ -60,18 +59,6 @@ def quick_collect():
                 if result.returncode != 0:
                     f.write(f"AVISO: comando retornou código {result.returncode}\n")
                 print(f"Executado: {cmd[0]}")
-
-            pods_result = run(["oc", "get", "pods", "-l", "component=elasticsearch", "-o", "name"])
-            pods = pods_result.stdout.split() if pods_result else []
-            for pod in pods:
-                f.write(f"### {pod} ###\n")
-                df_result = run(["oc", "-c", "elasticsearch", "exec", pod, "--", "df", "-kh"])
-                if df_result is None:
-                    f.write(f"ERRO: comando excedeu timeout de {COMMAND_TIMEOUT}s\n")
-                    continue
-                for line in df_result.stdout.splitlines():
-                    if "persistent" in line:
-                        f.write(line + "\n")
         except KeyboardInterrupt:
             print("\nColeta interrompida pelo usuário")
             f.write("\nColeta interrompida pelo usuário\n")
