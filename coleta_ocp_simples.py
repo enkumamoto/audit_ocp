@@ -5,9 +5,16 @@ import os
 import shutil
 import sys
 import datetime
+import signal
 
 KUBECONFIG_PATH = "/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/localhost.kubeconfig"
 COMMAND_TIMEOUT = 600  # segundos
+
+
+def handle_sigint(signum, frame):
+    """Handler para SIGINT (Ctrl+C)"""
+    print("\n[INTERROMPIDO por usuário]")
+    sys.exit(130)
 
 
 def run(cmd, timeout=COMMAND_TIMEOUT):
@@ -19,6 +26,8 @@ def run(cmd, timeout=COMMAND_TIMEOUT):
 
 def quick_collect():
     """Versão simplificada da coleta"""
+    signal.signal(signal.SIGINT, handle_sigint)
+
     if shutil.which("oc") is None:
         print("ERRO: binário 'oc' não encontrado no PATH")
         sys.exit(1)
