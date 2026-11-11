@@ -6,6 +6,7 @@ import shutil
 import sys
 import time
 import datetime
+import select
 
 KUBECONFIG_PATH = "/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/localhost.kubeconfig"
 OCP_DOMAIN = os.environ.get("OCP_DOMAIN", "")  # ex: export OCP_DOMAIN=ocp.exemplo.com.br
@@ -28,17 +29,25 @@ def run_command(command, description, log_file, timeout=COMMAND_TIMEOUT):
             bufsize=1,
         )
 
-        start = time.monotonic()
-        for line in process.stdout:
-            print(line, end='')
-            log_file.write(line)
-            log_file.flush()
-            if time.monotonic() - start > timeout:
+        deadline = time.time() + timeout
+        while process.poll() is None:
+            remaining = deadline - time.time()
+            if remaining <= 0:
                 process.kill()
                 msg = f"ERRO: comando excedeu timeout de {timeout}s e foi encerrado\n"
                 print(msg, end='')
                 log_file.write(msg)
+                log_file.flush()
                 break
+
+            # Use select() com timeout curto para evitar travar em comandos silenciosos
+            ready = select.select([process.stdout], [], [], min(1, remaining))
+            if ready[0]:
+                linha = process.stdout.readline()
+                if linha:
+                    print(linha, end='')
+                    log_file.write(linha)
+                    log_file.flush()
 
         process.wait()
 
@@ -114,6 +123,8 @@ def main():
          "Logs do etcd"),
         (["oc", "get", "co", "network", "-o", "yaml"],
          "Operador de Rede (YAML)"),
+        (["sh", "-c", "oc project openshift-logging && for pod in $(oc get pods -l component=elasticsearch -o name 2>/dev/null); do echo \"### $pod ###\" && oc -c elasticsearch exec $pod -- df -kh 2>&1 | grep persistent; done"],
+         "Uso de disco (Elasticsearch)"),
     ]
 
     with open(log_filename, 'w', encoding='utf-8') as log_file:
