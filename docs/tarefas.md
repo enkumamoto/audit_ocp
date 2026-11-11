@@ -116,7 +116,7 @@
 - [x] T3: Sincronizar completo.py e completo.sh
 - [x] T4: Sincronizar simples.py e simples.sh
 - [x] T5: Corrigir bugs técnicos
-- [ ] T6: Atualizar README.md
+- [x] T6: Atualizar README.md
 - [ ] T7: Testes de integridade
 
 ### Branch 2: feat/audit-lib-refactor (opcional)
