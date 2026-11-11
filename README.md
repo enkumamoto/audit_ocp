@@ -73,11 +73,12 @@ O script gerará:
 
 ### 🔍 Principais funcionalidades
 
-- **Execução de comandos com registro estruturado** na função `run_command()`
+- **Execução de comandos com timeout robusto** via `run_command()` que usa `select()` para detectar timeout mesmo em comandos silenciosos
 - **Captura automática do nome do pod etcd** usando `oc get pods -n openshift-etcd -o name`
-- **Tratamento de exceções** para timeout e falhas de execução
+- **Tratamento robusto de exceções** para timeout e falhas de execução
 - **Saída em tempo real** dos comandos
 - **Resumo final** com localização dos arquivos gerados
+- **Coleta de disco do Elasticsearch** para diagnóstico completo de espaço disponível
 
 ---
 
@@ -104,11 +105,12 @@ Criará: `ocp_debug_YYYYMMDD_HHMMSS.txt`
 
 ### 🔍 Principais funcionalidades
 
-- **Função `executar_comando`** para registro formatado
-- **Identificação automática do pod etcd**
+- **Funções estruturadas** para execução com timeout via `timeout` command
+- **Identificação automática do pod etcd** com fallback para `etcd-master-0.<domínio>`
 - **Verificação de existência do KUBECONFIG**
 - **Saída em tempo real** para terminal e arquivo
-- **Tratamento básico de erros**
+- **Tratamento de erros** via `PIPESTATUS`
+- **Coleta de disco do Elasticsearch** para diagnóstico completo
 
 ---
 
@@ -135,11 +137,12 @@ Gera: `ocp_quick_YYYYMMDD_HHMMSS.txt`
 
 ### 🔍 Funcionalidades principais
 
-- **Execução mínima** de comandos essenciais
+- **Execução mínima** de comandos essenciais (status ops, pods, network)
 - **Redirecionamento simples** de saída
-- **Must-gather incluído** no fluxo principal
-- **Uso de nome fixo** para o pod etcd: `etcd-master-0.ocp.embasanet.ba.gov.br`
-- **Sem verificações complexas** para máxima velocidade
+- **Must-gather CNV incluído** no fluxo principal (leve e rápido)
+- **SEM coleta de:** must-gather padrão, logs do etcd, disco do Elasticsearch
+- **Verificação de KUBECONFIG** e timeout aplicados
+- **Máxima velocidade:** ~2-5 minutos
 
 ---
 
@@ -176,14 +179,19 @@ Gera: `ocp_quick_YYYYMMDD_HHMMSS.txt`
 
 | Recurso                           | completo.py | completo.sh | simples.sh | simples.py |
 | --------------------------------- | ----------- | ----------- | ---------- | ---------- |
-| Must-gather com timeout           | ✔️          | ✔️          | ✖️         | ✖️         |
-| Logs detalhados e organizados     | ✔️          | ✔️          | Médio      | Básico     |
+| Must-gather com timeout           | ✔️ (select) | ✔️ (timeout)| ✖️         | ✖️         |
+| Must-gather padrão + CNV          | ✔️          | ✔️          | ✖️         | ✖️         |
+| Logs do etcd                      | ✔️          | ✔️          | ✖️         | ✖️         |
+| Disco do Elasticsearch            | ✔️          | ✔️          | ✖️         | ✖️         |
+| Status dos operadores             | ✔️          | ✔️          | ✔️         | ✔️         |
+| Pods do etcd                      | ✔️          | ✔️          | ✔️         | ✔️         |
+| Operador de rede (YAML)           | ✔️          | ✔️          | ✔️         | ✔️         |
 | Descoberta automática do pod etcd | ✔️          | ✔️          | ✖️         | ✖️         |
-| Tratamento de exceções            | ✔️          | Básico      | Básico     | Básico     |
+| Verificação de KUBECONFIG         | ✔️          | ✔️          | ✔️         | ✔️         |
+| Tratamento de exceções            | ✔️ (Alto)   | Médio       | Básico     | Básico     |
 | Saída em tempo real               | ✔️          | ✔️          | ✖️         | ✖️         |
-| Verificação de KUBECONFIG         | ✔️          | ✔️          | ✖️         | ✖️         |
-| Velocidade                        | Médio       | Médio       | Rápido     | Rápido     |
-| Flexibilidade                     | Alta        | Média       | Baixa      | Baixa      |
+| Velocidade                        | 10-20 min   | 10-20 min   | 2-5 min    | 2-5 min    |
+| Storage necessário                | ~2-5 GB     | ~2-5 GB     | ~200-500MB | ~200-500MB |
 
 ---
 
@@ -202,22 +210,34 @@ Equivalente ao Python em funcionalidades, porém em Bash puro.
 ### 🎯 Investigação rápida / emergência
 
 → **Use:** `coleta_ocp_simples.sh` ou `coleta_ocp_simples.py`  
-Mais rápido, menos detalhado, ideal para verificação rápida do estado do cluster.
+Mais rápido (2-5 minutos), menos detalhado, ideal para verificação rápida do estado do cluster. **Não coleta** must-gather padrão, logs do etcd ou disco do Elasticsearch.
 
 ### 🎯 Preferência por Python com simplicidade
 
 → **Use:** `coleta_ocp_simples.py`  
-Quando se deseja a simplicidade do Bash mas com a estrutura do Python.
+Quando se deseja a simplicidade do Bash mas com a estrutura do Python. Mesma funcionalidade reduzida de `coleta_ocp_simples.sh`.
 
 ---
 
 ## 📝 Notas Importantes
 
-1. **Permissões:** Todos os scripts devem ser executados com permissões elevadas
-2. **Storage:** Verifique espaço em disco suficiente para os arquivos do must-gather
+1. **Permissões:** Todos os scripts devem ser executados com permissões elevadas (root ou equivalente)
+2. **Storage:** Verifique espaço em disco suficiente
+   - **Versão completa** (`completo.*`): ~2-5 GB (must-gather padrão é pesado)
+   - **Versão simples** (`simples.*`): ~200-500 MB
 3. **Rede:** Certifique-se de ter acesso aos registros container necessários
 4. **Tempo:** O must-gather pode levar vários minutos dependendo do tamanho do cluster
 5. **Backup:** Os scripts não fazem backup de dados - são apenas para coleta de informações
+
+---
+
+## ⚠️ Pegadinhas e Limitações
+
+- **Timeout em `completo.py`:** Agora corrigido com `select()` para monitorar saída, funciona mesmo com comandos silenciosos que não geram linhas de output
+- **`PIPESTATUS` em `completo.sh`:** Corrigido; captura status do comando imediatamente após pipe, antes de qualquer outro comando
+- **`oc project openshift-logging` em coleta de Elasticsearch:** Altera o contexto do KUBECONFIG local do nó; é restaurado automaticamente após a coleta
+- **Código de saída 130 em `simples.py`:** Agora retorna código correto quando Ctrl+C é pressionado (equivalente ao Bash)
+- **Descoberta de pod etcd:** Os scripts `completo.*` descobrem o pod automaticamente; scripts `simples.*` não coletam logs do etcd
 
 ---
 
