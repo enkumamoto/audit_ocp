@@ -114,6 +114,8 @@ def main():
          "Logs do etcd"),
         (["oc", "get", "co", "network", "-o", "yaml"],
          "Operador de Rede (YAML)"),
+        (["sh", "-c", "oc project openshift-logging && for pod in $(oc get pods -l component=elasticsearch -o name 2>/dev/null); do echo \"### $pod ###\" && oc -c elasticsearch exec $pod -- df -kh 2>&1 | grep persistent; done"],
+         "Uso de disco (Elasticsearch)"),
     ]
 
     with open(log_filename, 'w', encoding='utf-8') as log_file:
