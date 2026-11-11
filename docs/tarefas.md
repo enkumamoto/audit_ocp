@@ -115,7 +115,7 @@
 - [x] T2: Decidir comportamento canônico
 - [x] T3: Sincronizar completo.py e completo.sh
 - [x] T4: Sincronizar simples.py e simples.sh
-- [ ] T5: Corrigir bugs técnicos
+- [x] T5: Corrigir bugs técnicos
 - [ ] T6: Atualizar README.md
 - [ ] T7: Testes de integridade
 
